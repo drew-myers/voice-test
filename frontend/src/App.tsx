@@ -1,5 +1,5 @@
 import { Change, diffLines } from "diff";
-import { ChevronDown, ChevronRight, Edit3, Mic, Square } from "lucide-react";
+import { ChevronDown, ChevronRight, Edit3, Mic, Settings, Square } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConversation } from "@elevenlabs/react";
 import "./App.css";
@@ -81,6 +81,11 @@ function App() {
   const [isStarting, setIsStarting] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isEnding, setIsEnding] = useState(false);
+  const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
+  const [currentAgentName, setCurrentAgentName] = useState<string | null>(null);
+  const [agentOverride, setAgentOverride] = useState<string | null>(null);
+  const [agentIdInput, setAgentIdInput] = useState("");
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<BlobPart[]>([]);
@@ -89,6 +94,76 @@ function App() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const waveformRef = useRef<HTMLSpanElement | null>(null);
   const skipTranscriptionRef = useRef(false);
+  const configMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const effectiveAgentId = useMemo(() => {
+    const trimmed = agentOverride?.trim();
+    return trimmed ? trimmed : null;
+  }, [agentOverride]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem("voice-test.agent-override");
+      const trimmed = stored?.trim();
+      if (trimmed) {
+        setAgentOverride(trimmed);
+        setAgentIdInput(trimmed);
+      }
+    } catch {
+      // ignore persistence failures
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const value = agentOverride?.trim();
+      if (value) {
+        window.localStorage.setItem("voice-test.agent-override", value);
+      } else {
+        window.localStorage.removeItem("voice-test.agent-override");
+      }
+    } catch {
+      // ignore persistence failures
+    }
+  }, [agentOverride]);
+
+  useEffect(() => {
+    if (isConfigOpen) {
+      setAgentIdInput(agentOverride ?? "");
+    }
+  }, [agentOverride, isConfigOpen]);
+
+  useEffect(() => {
+    if (!isConfigOpen) {
+      return;
+    }
+    const handlePointer = (event: MouseEvent) => {
+      if (
+        configMenuRef.current &&
+        event.target instanceof Node &&
+        !configMenuRef.current.contains(event.target)
+      ) {
+        setIsConfigOpen(false);
+      }
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsConfigOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [isConfigOpen]);
 
   const conversation = useConversation({
     onConnect: () => setError(null),
@@ -103,24 +178,40 @@ function App() {
     const load = async () => {
       setIsPromptLoading(true);
       setPromptError(null);
+      if (!cancelled) {
+        setCurrentAgentId(effectiveAgentId ?? null);
+        setCurrentAgentName(null);
+      }
       try {
+        const query = effectiveAgentId
+          ? `?agent_id=${encodeURIComponent(effectiveAgentId)}`
+          : "";
         const response = await fetch(
-          buildEndpointUrl("/api/elevenlabs/prompt"),
+          buildEndpointUrl(`/api/elevenlabs/prompt${query}`),
         );
         if (!response.ok) {
           const detail = await response.text();
           throw new Error(detail || "Failed to fetch agent prompt.");
         }
         const data = (await response.json()) as {
+          agent_id?: string | null;
+          display_name?: string | null;
           prompt?: string | null;
           first_message?: string | null;
         };
         if (!cancelled) {
           const prompt = data.prompt ?? "";
           const firstMessage = data.first_message ?? "";
+          const agentId = data.agent_id?.trim() || effectiveAgentId || null;
+          const displayName =
+            typeof data.display_name === "string"
+              ? data.display_name.trim() || null
+              : null;
           setCurrentPrompt(prompt);
           setCurrentFirstMessage(firstMessage);
           setFirstMessageDraft(firstMessage);
+          setCurrentAgentId(agentId);
+          setCurrentAgentName(displayName);
         }
       } catch (err) {
         if (!cancelled) {
@@ -140,7 +231,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [effectiveAgentId]);
 
   const statusLabel = useMemo(() => {
     const status = conversation.status;
@@ -219,7 +310,10 @@ function App() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ feedback }),
+          body: JSON.stringify({
+            feedback,
+            agent_id: effectiveAgentId ?? undefined,
+          }),
         },
       );
 
@@ -229,16 +323,27 @@ function App() {
       }
 
       const data = (await response.json()) as {
+        agent_id?: string | null;
+        display_name?: string | null;
         current_prompt: string;
         suggested_prompt: string;
       };
 
       const basePrompt = stripCodeFence(data.current_prompt);
       const revisedPrompt = stripCodeFence(data.suggested_prompt);
+      const resolvedAgentId = data.agent_id?.trim() || effectiveAgentId || null;
+      const resolvedDisplayName =
+        typeof data.display_name === "string"
+          ? data.display_name.trim() || null
+          : resolvedAgentId !== currentAgentId
+            ? null
+            : currentAgentName;
 
       setCurrentPrompt(basePrompt);
       setSuggestedPrompt(revisedPrompt);
       setDiffParts(diffLines(basePrompt, revisedPrompt));
+      setCurrentAgentId(resolvedAgentId);
+      setCurrentAgentName(resolvedDisplayName ?? null);
       setEditStage("result");
     } catch (err) {
       setSuggestError(
@@ -250,7 +355,7 @@ function App() {
     } finally {
       setIsSuggesting(false);
     }
-  }, [feedback]);
+  }, [currentAgentId, currentAgentName, effectiveAgentId, feedback]);
 
   const handleSavePrompt = useCallback(
     async (nextPrompt: string, nextFirstMessage?: string | null) => {
@@ -261,6 +366,9 @@ function App() {
         const payload: Record<string, unknown> = { prompt: nextPrompt };
         if (nextFirstMessage !== undefined) {
           payload.first_message = nextFirstMessage;
+        }
+        if (effectiveAgentId) {
+          payload.agent_id = effectiveAgentId;
         }
 
         const response = await fetch(
@@ -278,16 +386,27 @@ function App() {
         }
 
         const data = (await response.json()) as {
+          agent_id?: string | null;
+          display_name?: string | null;
           prompt?: string | null;
           first_message?: string | null;
         };
 
         const updatedPrompt = data.prompt ?? nextPrompt;
         const updatedFirstMessage = data.first_message ?? currentFirstMessage;
+        const resolvedAgentId = data.agent_id?.trim() || effectiveAgentId || null;
+        const resolvedDisplayName =
+          typeof data.display_name === "string"
+            ? data.display_name.trim() || null
+            : resolvedAgentId !== currentAgentId
+              ? null
+              : currentAgentName;
 
         setCurrentPrompt(updatedPrompt);
         setCurrentFirstMessage(updatedFirstMessage);
         setFirstMessageDraft(updatedFirstMessage);
+        setCurrentAgentId(resolvedAgentId);
+        setCurrentAgentName(resolvedDisplayName ?? null);
         setPromptMessage("Agent settings saved to ElevenLabs.");
         resetSuggestionState();
         setEditStage("input");
@@ -300,7 +419,7 @@ function App() {
         setIsPromptSaving(false);
       }
     },
-    [currentFirstMessage, resetSuggestionState],
+    [currentAgentId, currentAgentName, currentFirstMessage, effectiveAgentId, resetSuggestionState],
   );
 
   const handleStartCall = useCallback(async () => {
@@ -337,7 +456,9 @@ function App() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify(
+            effectiveAgentId ? { agent_id: effectiveAgentId } : {},
+          ),
         },
       );
 
@@ -353,18 +474,29 @@ function App() {
         throw new Error("Conversation token missing from backend response.");
       }
 
+      const resolvedAgentId =
+        typeof payload.agent_id === "string"
+          ? payload.agent_id.trim()
+          : effectiveAgentId || null;
+
       const id = await conversation.startSession({
         conversationToken,
         connectionType: "webrtc",
       });
 
       setConversationId(id);
+      setCurrentAgentId(resolvedAgentId);
+      const rawDisplayName = payload["display_name"];
+      if (typeof rawDisplayName === "string") {
+        const trimmedDisplayName = rawDisplayName.trim();
+        setCurrentAgentName(trimmedDisplayName || null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsStarting(false);
     }
-  }, [conversation]);
+  }, [conversation, effectiveAgentId]);
 
   const handleEndCall = useCallback(async () => {
     if (conversation.status === "disconnected") {
@@ -388,6 +520,12 @@ function App() {
     conversation.status === "connected" || conversation.status === "connecting";
   const hasFirstMessageChanges = firstMessageDraft !== currentFirstMessage;
   const isManualStage = editStage === "manual" && manualPrompt !== null;
+  const agentInputTrimmed = agentIdInput.trim();
+  const isAgentOverrideDirty = agentInputTrimmed !== (agentOverride ?? "");
+  const resolvedAgentId = currentAgentId ?? effectiveAgentId ?? null;
+  const agentDisplayLabel = currentAgentName ?? resolvedAgentId ?? "";
+  const agentTooltip = resolvedAgentId ?? undefined;
+  const hasAgentDetails = Boolean(agentDisplayLabel);
 
   const renderDiff = () => (
     <div className="diff">
@@ -419,6 +557,18 @@ function App() {
           {statusLabel}
         </span>
       </div>
+
+      {hasAgentDetails && (
+        <div className="panel__agent">
+          <span className="label">Agent</span>
+          <span
+            className="panel__agent-name"
+            title={agentTooltip ?? undefined}
+          >
+            {agentDisplayLabel}
+          </span>
+        </div>
+      )}
 
       {conversationId && (
         <div className="panel__conversation">
@@ -476,6 +626,18 @@ function App() {
         <h1>Edit Agent Prompt</h1>
         <p>Provide feedback and review the suggested update.</p>
       </header>
+
+      {hasAgentDetails && (
+        <div className="panel__agent">
+          <span className="label">Agent</span>
+          <span
+            className="panel__agent-name"
+            title={agentTooltip ?? undefined}
+          >
+            {agentDisplayLabel}
+          </span>
+        </div>
+      )}
 
       {editStage === "input" && (
         <section className="prompt-block">
@@ -872,6 +1034,123 @@ function App() {
   return (
     <main className="app">
       <section className="panel">
+        <div className="panel__toolbar">
+          <div className="panel__config" ref={configMenuRef}>
+            <button
+              type="button"
+              className="icon-button"
+              aria-haspopup="dialog"
+              aria-expanded={isConfigOpen}
+              aria-controls="agent-config-menu"
+              onClick={() => setIsConfigOpen((prev) => !prev)}
+              title="Configure agent"
+              aria-label="Configure agent"
+            >
+              <Settings size={16} />
+            </button>
+            {isConfigOpen && (
+              <div
+                id="agent-config-menu"
+                role="dialog"
+                aria-modal="false"
+                className="config-menu"
+              >
+                <div className="config-menu__header">
+                  <span className="label">Agent override</span>
+                  <p className="config-menu__description">
+                    Provide a custom ElevenLabs agent ID. Leave blank to use the
+                    backend default.
+                  </p>
+                </div>
+                <input
+                  type="text"
+                  className="config-menu__input"
+                  value={agentIdInput}
+                  onChange={(event) => setAgentIdInput(event.target.value)}
+                  placeholder="agent_123..."
+                  autoFocus
+                />
+                <p className="config-menu__status">
+                  {hasAgentDetails ? (
+                    <>
+                      Currently using{" "}
+                      <span
+                        className="config-menu__name"
+                        title={agentTooltip ?? undefined}
+                      >
+                        {agentDisplayLabel}
+                      </span>
+                    </>
+                  ) : (
+                    "Using backend default configuration."
+                  )}
+                </p>
+                <div className="config-menu__actions">
+                  <button
+                    type="button"
+                    className="button outline small"
+                    onClick={() => {
+                      if (!agentOverride) {
+                        setAgentIdInput("");
+                        setIsConfigOpen(false);
+                        return;
+                      }
+                      if (isCallActive) {
+                        void handleEndCall();
+                      } else {
+                        setConversationId(null);
+                      }
+                      setAgentOverride(null);
+                      setAgentIdInput("");
+                      setIsConfigOpen(false);
+                      setCurrentAgentId(null);
+                      setCurrentAgentName(null);
+                      setPromptMessage(null);
+                      setPromptError(null);
+                      resetSuggestionState();
+                      setMode("call");
+                      setFirstMessageExpanded(false);
+                      setEditStage("input");
+                    }}
+                    disabled={!agentOverride && agentInputTrimmed.length === 0}
+                  >
+                    Use backend default
+                  </button>
+                  <button
+                    type="button"
+                    className="button primary small"
+                    onClick={() => {
+                      const nextOverride = agentInputTrimmed || null;
+                      if (!isAgentOverrideDirty) {
+                        setIsConfigOpen(false);
+                        return;
+                      }
+                      if (isCallActive) {
+                        void handleEndCall();
+                      } else {
+                        setConversationId(null);
+                      }
+                      setAgentOverride(nextOverride);
+                      setAgentIdInput(nextOverride ?? "");
+                      setIsConfigOpen(false);
+                      setCurrentAgentId(nextOverride);
+                      setCurrentAgentName(null);
+                      setPromptMessage(null);
+                      setPromptError(null);
+                      resetSuggestionState();
+                      setMode("call");
+                      setFirstMessageExpanded(false);
+                      setEditStage("input");
+                    }}
+                    disabled={!isAgentOverrideDirty}
+                  >
+                    Apply override
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
         {mode === "call" ? renderCallMode() : renderEditMode()}
       </section>
     </main>

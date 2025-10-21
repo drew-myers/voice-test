@@ -39,6 +39,7 @@ async def issue_conversation_token(
 
 class PromptResponse(BaseModel):
     agent_id: str
+    display_name: Optional[str] = None
     prompt: Optional[str] = None
     first_message: Optional[str] = None
 
@@ -60,6 +61,7 @@ class PromptSuggestionRequest(BaseModel):
 
 class PromptSuggestionResponse(BaseModel):
     agent_id: str
+    display_name: Optional[str] = None
     current_prompt: str
     suggested_prompt: str
 
@@ -130,6 +132,7 @@ async def save_prompt(body: PromptUpdateRequest) -> PromptResponse:
         )
         prompt_text = None
         first_message = None
+        display_name = None
         try:
             prompt_text = (
                 updated["conversation_config"]["agent"]["prompt"]["prompt"]
@@ -142,9 +145,21 @@ async def save_prompt(body: PromptUpdateRequest) -> PromptResponse:
             )  # type: ignore[index]
         except (KeyError, TypeError):
             first_message = body.first_message
+        if isinstance(updated, dict):
+            raw_name = updated.get("display_name")
+            if isinstance(raw_name, str):
+                display_name = raw_name.strip() or None
+            elif raw_name is None:
+                display_name = None
+        resolved_agent_id = ""
+        if isinstance(updated, dict):
+            resolved_agent_id = str(updated.get("agent_id") or "")
+        if not resolved_agent_id:
+            resolved_agent_id = body.agent_id or ""
 
         return PromptResponse(
-            agent_id=body.agent_id or updated.get("agent_id", ""),
+            agent_id=resolved_agent_id,
+            display_name=display_name,
             prompt=prompt_text,
             first_message=first_message,
         )

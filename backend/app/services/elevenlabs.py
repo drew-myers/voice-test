@@ -12,6 +12,38 @@ import httpx
 from ..config import get_settings
 
 
+def _extract_display_name(payload: Any) -> Optional[str]:
+    if not isinstance(payload, dict):
+        return None
+
+    candidates: list[Any] = [
+        payload.get("display_name"),
+        payload.get("name"),
+        payload.get("agent_name"),
+        payload.get("title"),
+    ]
+
+    conversation_agent = payload.get("conversation_config", {}).get("agent")
+    if isinstance(conversation_agent, dict):
+        candidates.extend(
+            [
+                conversation_agent.get("display_name"),
+                conversation_agent.get("name"),
+                conversation_agent.get("agent_name"),
+                conversation_agent.get("public_name"),
+                conversation_agent.get("title"),
+            ]
+        )
+
+    for value in candidates:
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                return trimmed
+
+    return None
+
+
 class ElevenLabsError(RuntimeError):
     """Raised when the ElevenLabs SDK encounters an error."""
 
@@ -107,6 +139,9 @@ async def create_conversation_token(agent_id: str | None = None) -> dict[str, An
     payload = result.model_dump() if hasattr(result, "model_dump") else result
     if isinstance(payload, dict):
         payload.setdefault("agent_id", resolved_agent_id)
+        display_name = _extract_display_name(payload)
+        if display_name:
+            payload.setdefault("display_name", display_name)
         return payload
 
     raise ElevenLabsError(f"Unexpected ElevenLabs response: {type(result)!r}")
@@ -137,9 +172,11 @@ async def get_prompt(agent_id: str | None = None) -> dict[str, Optional[str]]:
         if isinstance(agent, dict)
         else None
     )
+    display_name = _extract_display_name(agent)
 
     return {
         "agent_id": resolved_agent_id,
+        "display_name": display_name,
         "prompt": prompt,
         "first_message": first_message,
     }
@@ -193,6 +230,18 @@ async def update_prompt(
         base_url=settings.elevenlabs_base_url,
         json={"conversation_config": conversation_config},
     )
+
+    display_name = _extract_display_name(updated_agent)
+
+    if isinstance(updated_agent, dict):
+        updated_agent.setdefault("agent_id", resolved_agent_id)
+        updated_agent["display_name"] = display_name
+    elif display_name:
+        updated_agent = {
+            "agent_id": resolved_agent_id,
+            "display_name": display_name,
+            "conversation_config": conversation_config,
+        }
 
     return updated_agent
 
@@ -279,9 +328,13 @@ async def suggest_prompt(
     resolved_agent_id = current.get("agent_id") or _resolve_agent_id(
         agent_id or settings.elevenlabs_agent_id
     )
+    current_display_name = current.get("display_name")
+    if not current_display_name:
+        current_display_name = _extract_display_name(current)
 
     return {
         "agent_id": resolved_agent_id,
+        "display_name": current_display_name,
         "current_prompt": current_prompt,
         "suggested_prompt": suggested_prompt,
     }

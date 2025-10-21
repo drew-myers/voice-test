@@ -21,6 +21,15 @@
   backdrop-filter: blur(18px);
 }
 
+.panel__toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.panel__config {
+  position: relative;
+}
+
 .panel__header h1 {
   margin: 0 0 0.5rem;
   font-size: 1.9rem;
@@ -33,7 +42,8 @@
 }
 
 .panel__status,
-.panel__conversation {
+.panel__conversation,
+.panel__agent {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -90,6 +100,19 @@
   word-break: break-all;
 }
 
+.panel__agent-name {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.65rem;
+  background: rgba(226, 232, 240, 0.12);
+  font-size: 0.88rem;
+  color: rgba(226, 232, 240, 0.92);
+  cursor: help;
+  max-width: 100%;
+  word-break: break-word;
+}
+
 .panel__error {
   border-radius: 0.75rem;
   padding: 0.85rem 1rem;
@@ -133,6 +156,11 @@
     box-shadow 0.15s ease,
     background 0.15s ease,
     color 0.15s ease;
+}
+
+.button.small {
+  padding: 0.55rem 0.9rem;
+  font-size: 0.9rem;
 }
 
 .button:disabled {
@@ -247,6 +275,76 @@
 
 .prompt-hint--warning {
   color: #facc15;
+}
+
+.config-menu {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 0.75rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(360px, calc(100vw - 3rem));
+  padding: 1rem;
+  border-radius: 0.9rem;
+  background: rgba(13, 19, 45, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 18px 36px rgba(8, 12, 24, 0.45);
+  z-index: 20;
+  transform: translateY(-50%);
+}
+
+.config-menu__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.config-menu__description {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.config-menu__input {
+  width: 100%;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.7);
+  color: inherit;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.95rem;
+}
+
+.config-menu__input:focus {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.75);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.config-menu__status {
+  margin: 0;
+  font-size: 0.78rem;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.config-menu__name {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.55rem;
+  background: rgba(226, 232, 240, 0.12);
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 0.78rem;
+  cursor: help;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.config-menu__actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
 }
 
 .prompt-footer {
@@ -447,6 +545,17 @@
   .panel__actions,
   .prompt-actions {
     flex-direction: column;
+  }
+
+  .panel__toolbar {
+    justify-content: flex-start;
+  }
+
+  .config-menu {
+    top: calc(100% + 0.75rem);
+    left: 0;
+    transform: none;
+    width: min(320px, calc(100vw - 2rem));
   }
 
   .prompt-footer {
