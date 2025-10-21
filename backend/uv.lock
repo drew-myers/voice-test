@@ -485,7 +485,6 @@ source = { editable = "." }
 dependencies = [
     { name = "elevenlabs" },
     { name = "fastapi" },
-    { name = "httpx" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -493,7 +492,6 @@ dependencies = [
 requires-dist = [
     { name = "elevenlabs", specifier = ">=0.2" },
     { name = "fastapi", specifier = ">=0.110" },
-    { name = "httpx", specifier = ">=0.26" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27" },
 ]
 
