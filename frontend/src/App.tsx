@@ -387,6 +387,7 @@ function App() {
   const isCallActive =
     conversation.status === "connected" || conversation.status === "connecting";
   const hasFirstMessageChanges = firstMessageDraft !== currentFirstMessage;
+  const isManualStage = editStage === "manual" && manualPrompt !== null;
 
   const renderDiff = () => (
     <div className="diff">
@@ -493,9 +494,8 @@ function App() {
             />
             <button
               type="button"
-              className={`record-button${
-                isRecording ? " record-button--active" : ""
-              }`}
+              className={`record-button${isRecording ? " record-button--active" : ""
+                }`}
               onMouseEnter={() => {
                 if (isRecording) {
                   setShowStopIcon(true);
@@ -694,14 +694,6 @@ function App() {
             >
               {isSuggesting ? "Generating…" : "Generate suggestion"}
             </button>
-            <button
-              type="button"
-              className="button secondary"
-              onClick={handleCancelEdit}
-              disabled={isPromptSaving || isSuggesting}
-            >
-              Back to call
-            </button>
           </div>
           {suggestError && (
             <div className="panel__error" role="alert">
@@ -775,14 +767,6 @@ function App() {
           <div className="prompt-actions">
             <button
               type="button"
-              className="button primary"
-              onClick={() => handleSavePrompt(manualPrompt, firstMessageDraft)}
-              disabled={isPromptSaving}
-            >
-              {isPromptSaving ? "Saving…" : "Save & Test"}
-            </button>
-            <button
-              type="button"
               className="button secondary"
               onClick={() => {
                 setManualPrompt(null);
@@ -838,21 +822,6 @@ function App() {
               >
                 Reset
               </button>
-              <button
-                type="button"
-                className="button outline"
-                onClick={() =>
-                  handleSavePrompt(currentPrompt, firstMessageDraft || "")
-                }
-                disabled={
-                  isPromptSaving ||
-                  isSuggesting ||
-                  isRecording ||
-                  !hasFirstMessageChanges
-                }
-              >
-                {isPromptSaving ? "Saving…" : "Save & Test"}
-              </button>
             </div>
             {hasFirstMessageChanges && (
               <p className="prompt-hint prompt-hint--warning">
@@ -868,14 +837,35 @@ function App() {
           {promptError}
         </div>
       )}
-      <button
-        type="button"
-        className="button tertiary"
-        onClick={handleCancelEdit}
-        disabled={isPromptSaving || isSuggesting}
-      >
-        Back to call
-      </button>
+      <div className="prompt-footer">
+        <button
+          type="button"
+          className="button primary"
+          onClick={() => {
+            if (isManualStage && manualPrompt !== null) {
+              void handleSavePrompt(manualPrompt, firstMessageDraft);
+            } else if (hasFirstMessageChanges) {
+              void handleSavePrompt(currentPrompt, firstMessageDraft || "");
+            }
+          }}
+          disabled={
+            isPromptSaving ||
+            isSuggesting ||
+            isRecording ||
+            (!isManualStage && !hasFirstMessageChanges)
+          }
+        >
+          {isPromptSaving ? "Saving…" : "Save & Test"}
+        </button>
+        <button
+          type="button"
+          className="button tertiary"
+          onClick={handleCancelEdit}
+          disabled={isPromptSaving || isSuggesting}
+        >
+          Back to call
+        </button>
+      </div>
     </>
   );
 
