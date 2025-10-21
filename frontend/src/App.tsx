@@ -527,6 +527,121 @@ function App() {
   const agentTooltip = resolvedAgentId ?? undefined;
   const hasAgentDetails = Boolean(agentDisplayLabel);
 
+  const renderConfigTrigger = () => (
+    <div className="panel__config" ref={configMenuRef}>
+      <button
+        type="button"
+        className="icon-button"
+        aria-haspopup="dialog"
+        aria-expanded={isConfigOpen}
+        aria-controls="agent-config-menu"
+        onClick={() => setIsConfigOpen((prev) => !prev)}
+        title="Configure agent"
+        aria-label="Configure agent"
+      >
+        <Settings size={16} />
+      </button>
+      {isConfigOpen && (
+        <div
+          id="agent-config-menu"
+          role="dialog"
+          aria-modal="false"
+          className="config-menu"
+        >
+          <div className="config-menu__header">
+            <span className="label">Agent override</span>
+            <p className="config-menu__description">
+              Provide a custom ElevenLabs agent ID. Leave blank to use the backend
+              default.
+            </p>
+          </div>
+          <input
+            type="text"
+            className="config-menu__input"
+            value={agentIdInput}
+            onChange={(event) => setAgentIdInput(event.target.value)}
+            placeholder="agent_123..."
+            autoFocus
+          />
+          <p className="config-menu__status">
+            {hasAgentDetails ? (
+              <>
+                Currently using{" "}
+                <span className="config-menu__name" title={agentTooltip ?? undefined}>
+                  {agentDisplayLabel}
+                </span>
+              </>
+            ) : (
+              "Using backend default configuration."
+            )}
+          </p>
+          <div className="config-menu__actions">
+            <button
+              type="button"
+              className="button outline small"
+              onClick={() => {
+                if (!agentOverride) {
+                  setAgentIdInput("");
+                  setIsConfigOpen(false);
+                  return;
+                }
+                if (isCallActive) {
+                  void handleEndCall();
+                } else {
+                  setConversationId(null);
+                }
+                setAgentOverride(null);
+                setAgentIdInput("");
+                setIsConfigOpen(false);
+                setCurrentAgentId(null);
+                setCurrentAgentName(null);
+                setPromptMessage(null);
+                setPromptError(null);
+                resetSuggestionState();
+                setMode("call");
+                setFirstMessageExpanded(false);
+                setEditStage("input");
+              }}
+              disabled={!agentOverride && agentInputTrimmed.length === 0}
+            >
+              Use backend default
+            </button>
+            <button
+              type="button"
+              className="button primary small"
+              onClick={() => {
+                const nextOverride = agentInputTrimmed || null;
+                if (!isAgentOverrideDirty) {
+                  setIsConfigOpen(false);
+                  return;
+                }
+                if (isCallActive) {
+                  void handleEndCall();
+                } else {
+                  setConversationId(null);
+                }
+                setAgentOverride(nextOverride);
+                setAgentIdInput(nextOverride ?? "");
+                setIsConfigOpen(false);
+                setCurrentAgentId(nextOverride);
+                setCurrentAgentName(null);
+                setPromptMessage(null);
+                setPromptError(null);
+                resetSuggestionState();
+                setMode("call");
+                setFirstMessageExpanded(false);
+                setEditStage("input");
+              }}
+              disabled={!isAgentOverrideDirty}
+            >
+              Apply override
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   const renderDiff = () => (
     <div className="diff">
       {diffParts.map((part, index) => {
@@ -547,8 +662,11 @@ function App() {
   const renderCallMode = () => (
     <>
       <header className="panel__header">
-        <h1>Voice Test</h1>
-        <p>Start an ElevenLabs WebRTC session from the browser.</p>
+        <div className="panel__header-row">
+          <h1>Voice Agent Training Demo</h1>
+          {renderConfigTrigger()}
+        </div>
+        <p>Talk to the voice agent, then iterate on the prompt and try again.</p>
       </header>
 
       <div className="panel__status">
@@ -623,7 +741,10 @@ function App() {
   const renderEditMode = () => (
     <>
       <header className="panel__header">
-        <h1>Edit Agent Prompt</h1>
+        <div className="panel__header-row">
+          <h1>Edit Agent Prompt</h1>
+          {renderConfigTrigger()}
+        </div>
         <p>Provide feedback and review the suggested update.</p>
       </header>
 
@@ -1034,123 +1155,6 @@ function App() {
   return (
     <main className="app">
       <section className="panel">
-        <div className="panel__toolbar">
-          <div className="panel__config" ref={configMenuRef}>
-            <button
-              type="button"
-              className="icon-button"
-              aria-haspopup="dialog"
-              aria-expanded={isConfigOpen}
-              aria-controls="agent-config-menu"
-              onClick={() => setIsConfigOpen((prev) => !prev)}
-              title="Configure agent"
-              aria-label="Configure agent"
-            >
-              <Settings size={16} />
-            </button>
-            {isConfigOpen && (
-              <div
-                id="agent-config-menu"
-                role="dialog"
-                aria-modal="false"
-                className="config-menu"
-              >
-                <div className="config-menu__header">
-                  <span className="label">Agent override</span>
-                  <p className="config-menu__description">
-                    Provide a custom ElevenLabs agent ID. Leave blank to use the
-                    backend default.
-                  </p>
-                </div>
-                <input
-                  type="text"
-                  className="config-menu__input"
-                  value={agentIdInput}
-                  onChange={(event) => setAgentIdInput(event.target.value)}
-                  placeholder="agent_123..."
-                  autoFocus
-                />
-                <p className="config-menu__status">
-                  {hasAgentDetails ? (
-                    <>
-                      Currently using{" "}
-                      <span
-                        className="config-menu__name"
-                        title={agentTooltip ?? undefined}
-                      >
-                        {agentDisplayLabel}
-                      </span>
-                    </>
-                  ) : (
-                    "Using backend default configuration."
-                  )}
-                </p>
-                <div className="config-menu__actions">
-                  <button
-                    type="button"
-                    className="button outline small"
-                    onClick={() => {
-                      if (!agentOverride) {
-                        setAgentIdInput("");
-                        setIsConfigOpen(false);
-                        return;
-                      }
-                      if (isCallActive) {
-                        void handleEndCall();
-                      } else {
-                        setConversationId(null);
-                      }
-                      setAgentOverride(null);
-                      setAgentIdInput("");
-                      setIsConfigOpen(false);
-                      setCurrentAgentId(null);
-                      setCurrentAgentName(null);
-                      setPromptMessage(null);
-                      setPromptError(null);
-                      resetSuggestionState();
-                      setMode("call");
-                      setFirstMessageExpanded(false);
-                      setEditStage("input");
-                    }}
-                    disabled={!agentOverride && agentInputTrimmed.length === 0}
-                  >
-                    Use backend default
-                  </button>
-                  <button
-                    type="button"
-                    className="button primary small"
-                    onClick={() => {
-                      const nextOverride = agentInputTrimmed || null;
-                      if (!isAgentOverrideDirty) {
-                        setIsConfigOpen(false);
-                        return;
-                      }
-                      if (isCallActive) {
-                        void handleEndCall();
-                      } else {
-                        setConversationId(null);
-                      }
-                      setAgentOverride(nextOverride);
-                      setAgentIdInput(nextOverride ?? "");
-                      setIsConfigOpen(false);
-                      setCurrentAgentId(nextOverride);
-                      setCurrentAgentName(null);
-                      setPromptMessage(null);
-                      setPromptError(null);
-                      resetSuggestionState();
-                      setMode("call");
-                      setFirstMessageExpanded(false);
-                      setEditStage("input");
-                    }}
-                    disabled={!isAgentOverrideDirty}
-                  >
-                    Apply override
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
         {mode === "call" ? renderCallMode() : renderEditMode()}
       </section>
     </main>
