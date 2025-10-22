@@ -1,11 +1,6 @@
 from . import app as app
 
 
-@app.get("/", tags=["root"])
-async def root() -> dict[str, str]:
-    return {"message": "Voice test backend is running"}
-
-
 def run_dev() -> None:
     """Start uvicorn with auto-reload for local development."""
     import uvicorn
