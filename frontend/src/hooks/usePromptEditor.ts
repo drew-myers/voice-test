@@ -429,10 +429,27 @@ export const usePromptEditor = ({
 
   const setAgentDetails = useCallback(
     (agentId: string | null, displayName: string | null) => {
+      const normalizedName =
+        typeof displayName === "string" ? displayName.trim() : "";
+
       setCurrentAgentId(agentId);
-      setCurrentAgentName(displayName);
+      setCurrentAgentName((prevName) => {
+        if (normalizedName) {
+          return normalizedName;
+        }
+
+        if (!agentId) {
+          return null;
+        }
+
+        if (agentId !== currentAgentId) {
+          return null;
+        }
+
+        return prevName;
+      });
     },
-    [],
+    [currentAgentId],
   );
 
   return {

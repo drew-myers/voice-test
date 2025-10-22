@@ -1,10 +1,17 @@
 import { useConversation } from "@elevenlabs/react";
-import { useCallback, useMemo, useState } from "react";
+import type { Role } from "@elevenlabs/react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { buildEndpointUrl, getTokenFromResponse } from "../utils/api";
 
 type UseCallControllerArgs = {
   effectiveAgentId: string | null;
   onAgentResolved: (agentId: string | null, displayName: string | null) => void;
+};
+
+export type ConversationMessage = {
+  id: string;
+  text: string;
+  source: Role;
 };
 
 export type UseCallControllerReturn = {
@@ -15,6 +22,7 @@ export type UseCallControllerReturn = {
   isStarting: boolean;
   isEnding: boolean;
   isCallActive: boolean;
+  messages: ConversationMessage[];
   startCall: () => Promise<void>;
   endCall: () => Promise<void>;
   resetCallState: () => void;
@@ -29,12 +37,52 @@ export const useCallController = ({
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
+  const messageCounterRef = useRef(0);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+
+  const handleIncomingMessage = useCallback(
+    ({ message, source }: { message: string; source: Role }) => {
+      const trimmedMessage = message.trim();
+      if (!trimmedMessage) {
+        return;
+      }
+
+      setMessages((prev) => {
+        const lastMessage = prev[prev.length - 1];
+
+        if (lastMessage && lastMessage.source === source) {
+          if (
+            trimmedMessage.startsWith(lastMessage.text) ||
+            lastMessage.text.startsWith(trimmedMessage)
+          ) {
+            return [
+              ...prev.slice(0, -1),
+              { ...lastMessage, text: trimmedMessage },
+            ];
+          }
+        }
+
+        messageCounterRef.current += 1;
+
+        return [
+          ...prev,
+          {
+            id: `message-${messageCounterRef.current}`,
+            source,
+            text: trimmedMessage,
+          },
+        ];
+      });
+    },
+    [],
+  );
 
   const conversation = useConversation({
     onConnect: () => setError(null),
     onDisconnect: () => setConversationId(null),
     onError: (err) =>
       setError(err instanceof Error ? err.message : String(err)),
+    onMessage: handleIncomingMessage,
   });
 
   const statusLabel = useMemo(() => {
@@ -104,6 +152,9 @@ export const useCallController = ({
           ? payload.agent_id.trim()
           : effectiveAgentId || null;
 
+      setMessages([]);
+      messageCounterRef.current = 0;
+
       const id = await conversation.startSession({
         conversationToken,
         connectionType: "webrtc",
@@ -144,6 +195,8 @@ export const useCallController = ({
 
   const resetCallState = useCallback(() => {
     setConversationId(null);
+    setMessages([]);
+    messageCounterRef.current = 0;
   }, []);
 
   const clearError = useCallback(() => {
@@ -158,6 +211,7 @@ export const useCallController = ({
     isStarting,
     isEnding,
     isCallActive,
+    messages,
     startCall,
     endCall,
     resetCallState,

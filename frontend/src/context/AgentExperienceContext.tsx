@@ -30,6 +30,7 @@ export type CallPanelState = {
   conversationStatus: UseCallControllerReturn["conversation"]["status"];
   conversationId: string | null;
   error: string | null;
+  messages: UseCallControllerReturn["messages"];
   promptMessage: string | null;
   isStarting: boolean;
   isEnding: boolean;
@@ -128,6 +129,7 @@ export const AgentExperienceProvider = ({
     endCall,
     resetCallState,
     clearError,
+    messages,
   } = useCallController({
     effectiveAgentId,
     onAgentResolved: setAgentDetails,
@@ -146,6 +148,7 @@ export const AgentExperienceProvider = ({
       isEnding,
       isCallActive,
       isPromptLoading,
+      messages,
     }),
     [
       conversationId,
@@ -153,6 +156,7 @@ export const AgentExperienceProvider = ({
       error,
       isCallActive,
       isEnding,
+      messages,
       isPromptLoading,
       isStarting,
       promptMessage,
